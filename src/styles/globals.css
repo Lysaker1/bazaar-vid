@@ -100,3 +100,54 @@
     color: #ffffff;
   }
 }
+
+/* Custom styles for rainbow animated border - NEW IMPLEMENTATION */
+@keyframes rotate-rainbow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.rainbow-border-input-wrapper {
+  position: relative !important;
+  border-radius: 0.75rem !important;
+  z-index: 1 !important;
+}
+
+.rainbow-border-input-wrapper::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: -3px !important; /* Controls border width */
+  z-index: -1 !important;
+  background: conic-gradient(
+    from 0deg,
+    #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, 
+    #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080, #ff0000
+  ) !important;
+  border-radius: inherit !important;
+  animation: rotate-rainbow 4s linear infinite !important;
+  opacity: 1 !important;
+  box-shadow: 
+    0 0 15px 2px rgba(255, 0, 128, 0.6), 
+    0 0 25px 5px rgba(0, 140, 255, 0.5) !important;
+}
+
+.rainbow-border-input-wrapper textarea {
+  background-color: white !important;
+  border: none !important;
+  border-radius: 0.5rem !important;
+  position: relative !important;
+  z-index: 2 !important; 
+  width: 100% !important;
+}
+
+/* Stronger focus effect */
+.rainbow-border-input-wrapper:focus-within::before {
+  opacity: 1 !important;
+  box-shadow: 
+    0 0 20px 4px rgba(255, 0, 128, 0.8),
+    0 0 30px 7px rgba(0, 140, 255, 0.7) !important;
+}
