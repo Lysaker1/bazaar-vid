@@ -2,9 +2,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { api } from "~/trpc/react";
 import LoginPage from "./login/page";
 import { Player } from "@remotion/player";
 import {
@@ -14,59 +12,7 @@ import {
   spring,
 } from "remotion";
 
-// Custom hook for typewriter effect
-const useTypewriterPrompt = (
-  staticPrefix: string, 
-  prompts: string[], 
-  typeSpeed = 50, 
-  deleteSpeed = 30, 
-  pauseTime = 2000
-): string => {
-  const [currentText, setCurrentText] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [promptIndex, setPromptIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    // If we're in the pause state
-    if (isPaused) {
-      timer = setTimeout(() => {
-        setIsPaused(false);
-        setIsDeleting(true);
-      }, pauseTime);
-      return () => clearTimeout(timer);
-    }
-
-    const currentPrompt = prompts[promptIndex] ?? '';
-    
-    // Handle deletion
-    if (isDeleting) {
-      timer = setTimeout(() => {
-        setCurrentText(prev => prev.substring(0, prev.length - 1));
-        if (currentText === '') {
-          setIsDeleting(false);
-          setPromptIndex((promptIndex + 1) % prompts.length);
-        }
-      }, deleteSpeed);
-    } 
-    // Handle typing
-    else {
-      if (currentText === currentPrompt) {
-        setIsPaused(true);
-      } else {
-        timer = setTimeout(() => {
-          setCurrentText(currentPrompt.substring(0, currentText.length + 1));
-        }, typeSpeed);
-      }
-    }
-    
-    return () => clearTimeout(timer);
-  }, [currentText, isDeleting, promptIndex, isPaused, prompts, typeSpeed, deleteSpeed, pauseTime]);
-  
-  return staticPrefix + currentText;
-};
 
 // Code animation component for the React, Rendered section
 const CodeDemoComposition = () => {
@@ -352,28 +298,9 @@ const EditableTextDemo = ({ customText }: { customText: string }) => {
 
 export default function HomePage() {
   const { data: session, status } = useSession();
-  const [prompt, setPrompt] = useState("");
   const [showLogin, setShowLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
-  const router = useRouter();
-  const createProject = api.project.create.useMutation();
-  
-  // Example prompts for rotation
-  const examplePrompts = [
-    "a scene where bold white text saying 'Launch Day' pulses over a shifting pink-to-purple gradient with sparkles trailing off",
-    "a scene with a dark terminal-style background and green monospaced code being typed out line-by-line, Matrix-style",
-    "a product feature appearing one by one in 3D-style cards that fade in and float upward with a spring motion",
-    "a scene that zooms into a phone screen while a hand scrolls through an app, with UI elements bouncing softly",
-    "a typewriter-style text effect introducing 'Introducing FlowSync', with a glitch transition revealing the app logo",
-    "a looping animation of fireworks exploding in sync with sound pulses on a midnight blue background",
-    "a scene where 3 floating avatars rotate in 3D space while chat bubbles fade in above them",
-    "a kinetic typography scene where the phrase 'Speed. Style. Simplicity.' slams onto the screen in sync with bass hits",
-    "a scene with a sunrise horizon behind mountains, as the product name rises with the sun using smooth motion blur"
-  ];
-  
-  // Rotating placeholder using the typewriter effect
-  const placeholderText = useTypewriterPrompt("Create ", examplePrompts);
 
   // State for the interactive playground - simplified
   const [customAnimationText, setCustomAnimationText] = useState("Or choose templates from our library and just change the content");
@@ -386,21 +313,7 @@ export default function HomePage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
-    if (status === "authenticated" && session?.user) {
-      // Create project with initial prompt as message
-      const project = await createProject.mutateAsync({
-        initialMessage: prompt,
-      });
-      if (project?.projectId) {
-        router.push(`/projects/${project.projectId}/edit`);
-      }
-    } else {
-      setShowLogin(true);
-    }
-  };
+
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -415,23 +328,9 @@ export default function HomePage() {
     setExpandedFaq(expandedFaq === id ? null : id);
   };
 
-  // Example video cards data
-  const exampleCards = [
-    {
-      prompt: "Create a line-by-line animation of code being generated",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//aiCoding.mp4",
-    },
-    {
-      prompt: "Create a prompt input box with type writer effect",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//Prompt%20input.mp4",
-    },
-    {
-      prompt: "Create exploding fireworks",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//firework.mp4",
-    },
-  ];
 
-  // FAQ data
+
+  // FAQ data - completely overhauled
   const faqs = [
     {
       id: "cost",
@@ -441,37 +340,22 @@ export default function HomePage() {
     {
       id: "how-it-works",
       question: "How does it work?",
-      answer: "Write a description of each scene you want to make and press \"Create.\" We'll generate the code. You can then refine every scene in the editor using natural language."
-    },
-    {
-      id: "save",
-      question: "How do I save it?",
-      answer: "We haven't implemented that yet — but it's coming soon. For now, we recommend screen recording. Your scenes will be saved to your account and rendering/exporting will be available in the next few days. Make sure you're signed up for updates to know when it goes live."
-    },
-    {
-      id: "mobile",
-      question: "Can I make it in a mobile-friendly format?",
-      answer: "Yes, just prompt the box to make it vertical, square, horizontal—whatever you want."
-    },
-    {
-      id: "figma",
-      question: "Can I import my Figma file?",
-      answer: "That feature is coming soon. Enter your email below to get notified."
-    },
-    {
-      id: "contact",
-      question: "How can I contact you?",
-      answer: "Email us at hello@bazaar.it."
+      answer: "Write a description of what you want to make and press \"Create.\" We'll generate the React code for your motion graphic in ~7 seconds. You can then refine every scene in the editor using natural language."
     },
     {
       id: "what-is",
-      question: "WTF is Bazaar?",
-      answer: "Bazaar is a fine-tuned LLM for converting text descriptions into motion graphic videos."
+      question: "What is Bazaar?",
+      answer: "Bazaar is our vision of a code-to-content tool. We want to democratize video creation by making it as simple as writing a prompt."
     },
     {
-      id: "music",
-      question: "Can I add music?",
-      answer: "That feature is coming soon."
+      id: "beta-features",
+      question: "What features are in Beta V1?",
+      answer: "Right now you can create individual motion graphic scenes with AI. We haven't built saving, exporting, or multi-scene projects yet - but they're coming soon!"
+    },
+    {
+      id: "roadmap",
+      question: "What new features are you working on?",
+      answer: "We're working on saving/exporting videos, multi-scene projects, music integration, Figma imports, and much more. Sign up below to get notified when they launch."
     }
   ];
 
@@ -515,130 +399,72 @@ export default function HomePage() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
-        <div className="mb-16 w-full text-center">
-          <h1 className="text-6xl font-extrabold mb-6">Motion Graphics, Made Simple</h1>
-          <p className="text-xl text-gray-600">Create stunning motion graphic scenes from a simple prompt</p>
+        {/* Announcement Badge */}
+        <div className="mb-8">
+          <div className="inline-flex items-center bg-white border border-gray-200 rounded-full px-3 py-1 shadow-sm">
+            <span className="bg-black text-white text-xs font-medium px-2 py-1 rounded-full mr-2">
+              Just Launched
+            </span>
+            <span className="text-sm text-gray-600">
+              Beta Version 1 is Live Now!
+            </span>
+          </div>
         </div>
-        
-        <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto" autoComplete="off">
-          <div 
-            style={{
-              position: 'relative',
-              padding: '2px',
-              borderRadius: '0.75rem',
-              background: 'linear-gradient(90deg, #ff3366, #ff9933, #ffff00, #33cc33, #3399ff, #cc33ff, #ff3366)',
-              backgroundSize: '400% 100%',
-              boxShadow: '0 0 15px 2px rgba(255, 51, 102, 0.3), 0 0 25px 5px rgba(51, 153, 255, 0.25)'
-            }}
-          >
-            <div
-              style={{
-                animation: 'rainbowMove 8s linear infinite',
-                position: 'absolute',
-                inset: 0,
-                background: 'inherit',
-                borderRadius: 'inherit',
-                backgroundSize: 'inherit',
-              }}
-            />
-            <style jsx>{`
-              @keyframes rainbowMove {
-                0% { background-position: 0% 50%; }
-                100% { background-position: 100% 50%; }
-              }
-            `}</style>
 
-            <div style={{
-              background: 'white',
-              borderRadius: 'calc(0.75rem - 2px)',
-              overflow: 'hidden',
-              position: 'relative',
-              zIndex: 1
-            }}>
-              <textarea
-                placeholder={placeholderText}
-                aria-label="Video idea prompt"
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                className="w-full px-6 py-6 focus:outline-none focus:ring-0 text-black min-h-[180px] resize-none pb-20"
-                style={{
-                  border: 'none',
-                  background: 'white'
-                }}
-                disabled={createProject.isPending}
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="absolute bottom-5 right-5 bg-black text-white px-6 py-3 rounded-md font-semibold hover:bg-gray-800 transition"
-                disabled={createProject.isPending || !prompt.trim()}
+        {/* Hero Section */}
+        <div className="w-full text-center mb-20">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-6xl md:text-7xl lg:text-8xl font-extrabold mb-8 text-black leading-tight">
+              Motion Graphics, Made Simple
+            </h1>
+            <p className="text-xl md:text-2xl text-black mb-12 max-w-3xl mx-auto leading-relaxed">
+              Bazaar is an AI-powered video generator that turns a description into an animated motion graphic — in seconds.
+            </p>
+            
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+              <button 
+                className="px-8 py-4 bg-black text-white text-lg font-semibold rounded-xl hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                onClick={() => setShowLogin(true)}
               >
-                {createProject.isPending ? "Creating..." : "Create"}
+                Try for Free
               </button>
             </div>
-          </div>
-        </form>
-        
-        {/* Example videos section */}
-        <section className="mt-20 w-full">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Create anything</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
-            {exampleCards.map((card, index) => (
-              <div key={index} className="flex flex-col bg-white rounded-lg shadow-lg overflow-hidden transition-transform hover:scale-[1.02] hover:shadow-xl">
-                <div className="aspect-video w-full bg-black overflow-hidden">
-                  <video
-                    src={card.videoUrl}
-                    className="w-full h-full object-cover"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                  />
+
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              <div className="flex flex-col items-center p-6 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-4a2 2 0 012-2h2.5" />
+                  </svg>
                 </div>
-                <div className="p-4 flex-1 flex flex-col">
-                  <div className="flex items-center mb-2">
-                    <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    </div>
-                    <p className="ml-2 text-sm font-medium text-gray-400">Prompt</p>
-                  </div>
-                  <h3 className="font-medium text-base text-gray-900">
-                    "{card.prompt}"
-                  </h3>
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No learning curve</h3>
+                <p className="text-gray-600 text-center">Just Prompt in, video out</p>
               </div>
-            ))}
-          </div>
-        </section>
-        
-        {/* How it Works Section */}
-        <section className="mt-24 w-full">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">How it Works</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 lg:gap-16 max-w-7xl mx-auto px-4">
-            {/* Step 1 */}
-            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">1</div>
-              <h3 className="text-xl font-semibold mb-4">Describe</h3>
-              <p className="text-gray-600">Describe exactly what you want to create in a scene — the more detail the better</p>
-            </div>
-            
-            {/* Step 2 */}
-            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">2</div>
-              <h3 className="text-xl font-semibold mb-4">Generate</h3>
-              <p className="text-gray-600">Generate motion graphics instantly with AI.</p>
-            </div>
-            
-            {/* Step 3 */}
-            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">3</div>
-              <h3 className="text-xl font-semibold mb-4">Refine</h3>
-              <p className="text-gray-600">Refine each scene using natural language prompts — iterate until it's perfect.</p>
+
+              <div className="flex flex-col items-center p-6 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Lightning Fast</h3>
+                <p className="text-gray-600 text-center">Generate animations in ~7 seconds</p>
+              </div>
+
+              <div className="flex flex-col items-center p-6 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Powered</h3>
+                <p className="text-gray-600 text-center">No editing skills neccessary. Just describe your vision and AI brings it to life</p>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
         
         {/* React, Rendered Section */}
         <section className="mt-24 w-full py-16 bg-white">
@@ -653,25 +479,16 @@ export default function HomePage() {
                 <div className="flex flex-wrap gap-4">
                   <button 
                     className="px-8 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition"
-                    onClick={() => {
-                      const promptTextarea = document.querySelector('textarea');
-                      if (promptTextarea) {
-                        promptTextarea.focus();
-                        window.scrollTo({
-                          top: promptTextarea.getBoundingClientRect().top + window.scrollY - 200,
-                          behavior: 'smooth'
-                        });
-                      }
-                    }}
+                    onClick={() => setShowLogin(true)}
                   >
-                    Try it now
+                    Try for Free
                   </button>
                 </div>
               </div>
               
               {/* Right Side - Visual Element */}
               <div className="relative">
-                <div className="rounded-xl overflow-hidden shadow-xl bg-gray-900 p-0 w-full aspect-video relative">
+                <div className="rounded-xl overflow-hidden shadow-xl bg-black p-0 w-full aspect-video relative">
                   <Player
                     component={CodeDemoComposition}
                     durationInFrames={300}
@@ -696,71 +513,6 @@ export default function HomePage() {
           </div>
         </section>
       </main>
-
-      {/* Interactive Code Playground Section - Moved outside main for full-width */}
-      <section className="w-full py-16 bg-gray-50">
-        <div className="w-full text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-10">Customize Hundreds of Templates.</h2>
-          <p className="text-xl text-gray-600 mb-12">
-            Edit the animation text below and see your changes come to life
-          </p>
-        </div>
-        
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left Side - Remotion Player */}
-            <div className="rounded-xl overflow-hidden shadow-xl bg-black aspect-video relative order-2 lg:order-1">
-              <Player
-                component={EditableTextDemo}
-                durationInFrames={120}
-                compositionWidth={1920}
-                compositionHeight={1080}
-                fps={30}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                }}
-                loop
-                autoPlay
-                controls={false}
-                showPosterWhenPaused={false}
-                inputProps={{ customText: customAnimationText }}
-              />
-              <div className="absolute -inset-x-4 -inset-y-4 z-[-1] bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 rounded-2xl opacity-50 blur-xl" />
-            </div>
-            
-            {/* Right Side - Text Input */}
-            <div className="flex flex-col order-1 lg:order-2">
-              <div className="flex flex-col items-center w-full">
-                <div className="w-full mb-4">
-                  <input 
-                    type="text" 
-                    value={inputText}
-                    onChange={(e) => {
-                      // Limit to 65 characters
-                      if (e.target.value.length <= 65) {
-                        setInputText(e.target.value);
-                      }
-                    }}
-                    placeholder="Enter your custom text (max 65 characters)"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black"
-                  />
-                  <div className="text-xs text-gray-500 mt-1 text-left">
-                    {inputText.length}/65 characters
-                  </div>
-                </div>
-                <button
-                  onClick={handleUpdateAnimation}
-                  disabled={inputText.length === 0 || inputText.length > 65}
-                  className="px-6 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  Update Animation
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Full width credibility section with auto-scrolling logos */}
       <section className="w-full py-16 bg-gray-50 overflow-hidden">
@@ -863,8 +615,22 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Email Sign-Up Section */}
+      {/* Create Now CTA Section */}
       <section className="w-full py-16 bg-gray-50">
+        <div className="max-w-2xl mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-4">Ready to create?</h2>
+          <p className="text-gray-600 mb-8">Start making motion graphics with AI in seconds</p>
+          <button 
+            className="px-8 py-4 bg-black text-white text-lg font-semibold rounded-xl hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+            onClick={() => setShowLogin(true)}
+          >
+            Create Now
+          </button>
+        </div>
+      </section>
+
+      {/* Email Sign-Up Section */}
+      <section className="w-full py-16 bg-white">
         <div className="max-w-lg mx-auto px-4 text-center">
           <h2 className="text-2xl font-bold mb-8 flex items-center justify-center gap-3">
             <span className="text-2xl">✉️</span> Sign up for updates
