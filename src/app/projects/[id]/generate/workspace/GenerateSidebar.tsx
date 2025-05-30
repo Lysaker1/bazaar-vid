@@ -22,6 +22,7 @@ import {
   ChevronRightIcon,
   PlusIcon,
   ListIcon,
+  Loader2Icon,
   FolderIcon,
   ChevronUpIcon,
   ChevronDownIcon,
@@ -33,11 +34,12 @@ type Project = {
 };
 
 interface GenerateSidebarProps {
-  projects: Project[];
+  // Removed projects prop since they'll be fetched internally
   currentProjectId: string;
   onAddPanel?: (panelType: PanelTypeG) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onNewProject?: (projectId: string) => void; // Callback for when new project is created
 }
 
 interface WorkspacePanelG {
@@ -68,12 +70,12 @@ const navItems: WorkspacePanelG[] = [
   { type: "code", id: "code", name: "Code", icon: Code2Icon, href: "#code" },
 ];
 
-export function GenerateSidebar({
-  projects,
-  currentProjectId,
-  onAddPanel,
-  isCollapsed = false,
+export function GenerateSidebar({ 
+  currentProjectId, 
+  onAddPanel, 
+  isCollapsed = false, 
   onToggleCollapse,
+  onNewProject
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
@@ -81,6 +83,17 @@ export function GenerateSidebar({
     "bazaar-projects-expanded",
     false, // Default to collapsed
   );
+  
+  // Fetch projects data internally
+  const { data: projectsData, isLoading: isLoadingProjects, error: projectsError } = api.project.list.useQuery();
+  
+  // Map the projectsData to the expected Project format
+  const projects: Project[] = useMemo(() => {
+    return (projectsData || []).map(dbProject => ({
+      id: dbProject.id,
+      name: dbProject.title || 'Untitled Project', // Map 'title' from DB to 'name' for the UI
+    }));
+  }, [projectsData]);
 
   // Setup mutation for creating a new project (for collapsed button)
   const utils = api.useUtils();
@@ -188,37 +201,18 @@ export function GenerateSidebar({
           {isCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <NewProjectButton
                   variant="ghost"
                   size="icon"
                   className="flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  onClick={() => {
-                    // Create project and redirect to /generate
-                    const createProject = async () => {
-                      try {
-                        const response = await fetch(
-                          "/api/trpc/project.create",
-                          {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({}),
-                          },
-                        );
-                        const data = await response.json();
-                        if (data.result?.data?.projectId) {
-                          router.push(
-                            `/projects/${data.result.data.projectId}/generate`,
-                          );
-                        }
-                      } catch (error) {
-                        console.error("Failed to create project:", error);
-                      }
-                    };
-                    createProject();
-                  }}
+                  onProjectCreated={onNewProject}
                 >
-                  <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                </Button>
+                  {createProject.isPending ? (
+                    <Loader2Icon className="h-5 w-5 text-gray-500 dark:text-gray-400 animate-spin" />
+                  ) : (
+                    <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                  )}
+                </NewProjectButton>
               </TooltipTrigger>
               <TooltipContent side="right">New Project</TooltipContent>
             </Tooltip>
@@ -228,6 +222,7 @@ export function GenerateSidebar({
               variant="ghost"
               size="default"
               showIcon={true}
+              onProjectCreated={onNewProject}
             />
           )}
         </div>
@@ -304,7 +299,17 @@ export function GenerateSidebar({
           <nav
             className={`${isCollapsed ? "px-0" : "px-2"} max-h-[30vh] w-full space-y-1 overflow-y-auto py-1`}
           >
-            {projects.map((project) => (
+            {isLoadingProjects && (
+              <div className="flex items-center justify-center p-2">
+                <Loader2Icon className="h-5 w-5 animate-spin text-gray-500" />
+              </div>
+            )}
+            {projectsError && (
+              <div className="p-2 text-sm text-red-500">
+                Error loading projects
+              </div>
+            )}
+            {!isLoadingProjects && projects.map((project) => (
               <Tooltip key={project.id}>
                 <TooltipTrigger asChild>
                   <Link
