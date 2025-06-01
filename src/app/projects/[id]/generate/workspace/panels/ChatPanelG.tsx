@@ -83,6 +83,7 @@ export default function ChatPanelG({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [progressStage, setProgressStage] = useState<string | null>(null);
   const [editComplexityFeedback, setEditComplexityFeedback] = useState<string | null>(null);
+  const [isMultiLine, setIsMultiLine] = useState(false);
   
   // Voice-to-text functionality (SIMPLIFIED: single voice system)
   const {
@@ -437,11 +438,31 @@ export default function ChatPanelG({
   useEffect(() => {
     if (textareaRef.current) {
       const textarea = textareaRef.current;
-      // Reset height to auto to get the correct scrollHeight
+      
+      // If no content, keep it at single line height
+      if (!message.trim()) {
+        textarea.style.height = '40px';
+        setIsMultiLine(false);
+        return;
+      }
+      
+      // Reset height to auto to get accurate scrollHeight measurement
       textarea.style.height = 'auto';
-      // Calculate new height (min 40px, max 10 lines ~200px)
-      const newHeight = Math.min(Math.max(textarea.scrollHeight, 40), 200);
-      textarea.style.height = `${newHeight}px`;
+      
+      // Calculate the natural height needed for content
+      const scrollHeight = textarea.scrollHeight;
+      const singleLineHeight = 40; // Our defined single line height
+      
+      if (scrollHeight <= singleLineHeight + 2) { // Small buffer for line-height variations
+        // Content fits in single line
+        textarea.style.height = `${singleLineHeight}px`;
+        setIsMultiLine(false);
+      } else {
+        // Content needs multiple lines
+        const newHeight = Math.min(scrollHeight, 400);
+        textarea.style.height = `${newHeight}px`;
+        setIsMultiLine(true);
+      }
     }
   }, [message]);
 
@@ -470,6 +491,16 @@ export default function ChatPanelG({
     // Do nothing during transcribing state
   }, [recordingState, startRecording, stopRecording]);
 
+  // Auto-insert transcription when ready
+  useEffect(() => {
+    if (transcription && transcription.trim()) {
+      setMessage(prev => {
+        const newMessage = prev ? `${prev} ${transcription}` : transcription;
+        return newMessage;
+      });
+    }
+  }, [transcription]);
+
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
     // Clear optimistic messages when switching projects
@@ -495,6 +526,30 @@ export default function ChatPanelG({
 
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
+
+  // Get microphone icon based on state
+  const getMicrophoneIcon = () => {
+    switch (recordingState) {
+      case 'recording':
+        return <Mic className="h-4 w-4 text-red-500 animate-pulse" />;
+      case 'transcribing':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      default:
+        return <MicIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />;
+    }
+  };
+
+  // Get microphone button styling
+  const getMicrophoneButtonStyling = () => {
+    switch (recordingState) {
+      case 'recording':
+        return "bg-red-50 border-red-200 hover:bg-red-100";
+      case 'transcribing':
+        return "bg-blue-50 border-blue-200";
+      default:
+        return "bg-gray-50 border-gray-200 hover:bg-gray-100";
+    }
+  };
 
   // 🚨 NEW: Error fix state
   const [hasSceneError, setHasSceneError] = useState(false);
@@ -743,21 +798,54 @@ export default function ChatPanelG({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <div className="flex-1 relative">
-            <Input
+        <form onSubmit={handleSubmit} className={`flex gap-2 ${isMultiLine ? 'items-end' : 'items-center'}`}>
+          <div className="flex-1 relative flex items-center">
+            {/* Microphone button inside input */}
+            {isVoiceSupported && (
+              <button
+                type="button"
+                onClick={handleMicrophoneClick}
+                disabled={isGenerating}
+                className={`absolute left-2 ${isMultiLine ? 'bottom-2' : 'top-1/2 transform -translate-y-1/2'} z-10 p-1.5 rounded-md border transition-all duration-200 ${getMicrophoneButtonStyling()}`}
+                title={
+                  recordingState === 'recording' 
+                    ? 'Stop recording' 
+                    : recordingState === 'transcribing'
+                    ? 'Processing...'
+                    : 'Start voice recording'
+                }
+              >
+                {getMicrophoneIcon()}
+              </button>
+            )}
+            
+            <textarea
+              ref={textareaRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder={
                 selectedSceneId
                   ? "Describe changes to the selected scene..."
                   : "Describe your video or add a new scene..."
               }
               disabled={isGenerating}
-              className="flex-1"
+              className={`w-full resize-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md transition-all duration-200 ${isVoiceSupported ? 'pl-12' : ''}`}
+              rows={1}
+              style={{ 
+                minHeight: '40px', 
+                maxHeight: '400px', 
+                lineHeight: '1.5',
+                height: '40px', // Ensure consistent initial height
+                overflow: 'hidden' // Prevent scrollbars during resize
+              }}
             />
           </div>
-          <Button type="submit" disabled={!message.trim() || isGenerating}>
+          <Button 
+            type="submit" 
+            disabled={!message.trim() || isGenerating}
+            className="flex-shrink-0 transition-all duration-200"
+          >
             {isGenerating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -765,10 +853,17 @@ export default function ChatPanelG({
             )}
           </Button>
         </form>
+        
+        {/* Voice error display only */}
+        {voiceError && (
+          <div className="text-xs text-red-600 mt-2">
+            Voice recording error: {voiceError}
+          </div>
+        )}
+        
         {selectedSceneId && (
           <div className="text-xs text-muted-foreground mt-2 space-y-1">
-            {/* <p>📍 Scene selected: {selectedScene?.data?.name || `Scene ${scenes.findIndex(s => s.id === selectedSceneId) + 1}`}</p> */}
-            <p className="opacity-75">💡 Our AI targets scenes automatically — you can also specify which scene, if dont trust the beta</p>
+            {/* Removed the unwanted text */}
           </div>
         )}
       </div>

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { ShareDialog } from "~/components/ShareDialog";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -66,7 +65,6 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
-  const [showShareDialog, setShowShareDialog] = useState(false);
 
   const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
@@ -145,7 +143,8 @@ export default function AppHeader({
 
       {/* Right: User info & Export button only */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">
-        {/* Share button */}
+        {/* Share button - Temporarily hidden */}
+        {/* 
         {projectId && (
           <Button
             variant="outline"
@@ -157,6 +156,7 @@ export default function AppHeader({
             Share
           </Button>
         )}
+        */}
         
         {/* Export button temporarily disabled until export feature is ready */}
         {/*
@@ -200,7 +200,8 @@ export default function AppHeader({
           </DropdownMenu>
         )}
         
-        {/* Share Dialog */}
+        {/* Share Dialog - Temporarily hidden */}
+        {/* 
         {projectId && (
           <ShareDialog
             projectId={projectId}
@@ -209,6 +210,7 @@ export default function AppHeader({
             onOpenChange={setShowShareDialog}
           />
         )}
+        */}
       </div>
     </header>
   );

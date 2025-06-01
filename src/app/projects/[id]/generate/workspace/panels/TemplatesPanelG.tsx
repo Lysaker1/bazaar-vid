@@ -4,7 +4,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, Loader2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
@@ -15,31 +15,148 @@ interface TemplatesPanelGProps {
   onSceneGenerated?: (sceneId: string) => Promise<void>;
 }
 
-// Mini template preview component using actual Remotion Player
-const TemplatePreview = ({ template }: { template: TemplateDefinition }) => {
+// Template thumbnail showing frame 15 by default
+const TemplateThumbnail = ({ template }: { template: TemplateDefinition }) => {
+  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template);
+
+  if (compilationError) {
+    return (
+      <div className="w-full h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-sm font-medium">Template Error</div>
+          <div className="text-gray-500 text-xs mt-1">Failed to compile</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isCompiling || !component) {
+    return (
+      <div className="w-full h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto mb-2" />
+          <div className="text-gray-500 text-sm">Compiling...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate safe initial frame (frame 15 or halfway through if template is shorter)
+  const safeInitialFrame = Math.min(15, Math.floor(template.duration / 2));
+
   return (
-    <div className="relative w-full aspect-video bg-black rounded-t overflow-hidden">
+    <div className="w-full h-full">
       <Player
-        component={template.component}
-        durationInFrames={template.duration}
-        compositionWidth={1920}
-        compositionHeight={1080}
-        fps={30}
-        style={{
-          width: '100%',
-          height: '100%',
-        }}
+        {...playerProps}
         controls={false}
-        loop
-        autoPlay
-        clickToPlay={false}
+        showVolumeControls={false}
+        autoPlay={false}
+        initialFrame={safeInitialFrame}
+        style={{ width: '100%', height: '100%' }}
       />
     </div>
   );
 };
 
+// Template video player for hover state
+const TemplateVideoPlayer = ({ template }: { template: TemplateDefinition }) => {
+  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template);
+
+  if (compilationError || isCompiling || !component) {
+    // Fall back to thumbnail on error/loading
+    return <TemplateThumbnail template={template} />;
+  }
+
+  return (
+    <div className="w-full h-full">
+      <Player
+        {...playerProps}
+        controls={false}
+        showVolumeControls={false}
+        autoPlay={true}
+        loop={true}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
+  );
+};
+
+// Template preview component with thumbnail/video toggle
+const TemplatePreview = ({ template, onClick, isLoading }: { 
+  template: TemplateDefinition; 
+  onClick: () => void;
+  isLoading: boolean;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleMouseEnter = useCallback(() => {
+    setIsHovered(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsHovered(false);
+  }, []);
+
+  return (
+    <div 
+      className="relative w-full aspect-video bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group"
+      onClick={onClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Show static frame 15 by default, playing video on hover */}
+      {isHovered ? (
+        <TemplateVideoPlayer template={template} />
+      ) : (
+        <TemplateThumbnail template={template} />
+      )}
+      
+      {/* Loading overlay - only shows when loading, covers full card */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity duration-200 z-10">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-white text-sm font-medium">Adding...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Template name overlay - only visible on hover when not loading */}
+      {isHovered && !isLoading && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10">
+          <div className="text-white text-sm font-medium">
+            {template.name}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Real template compilation component  
+const useCompiledTemplate = (template: TemplateDefinition) => {
+  // Templates already have working React components - use them directly!
+  const component = template.component;
+  const isCompiling = false; // No compilation needed
+  const compilationError = null; // No compilation errors
+
+  return { 
+    component, 
+    isCompiling, 
+    compilationError,
+    playerProps: {
+      component,
+      durationInFrames: template.duration,
+      fps: 30,
+      compositionWidth: 1920,
+      compositionHeight: 1080,
+    }
+  };
+};
+
 export default function TemplatesPanelG({ projectId, onSceneGenerated }: TemplatesPanelGProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
@@ -47,6 +164,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
     onSuccess: async (result) => {
+      setLoadingTemplateId(null);
       if (result.success) {
         toast.success(`${result.message}`);
         console.log('[TemplatesPanelG] Template added successfully:', result.scene);
@@ -73,6 +191,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       }
     },
     onError: (error) => {
+      setLoadingTemplateId(null);
       console.error('[TemplatesPanelG] Template addition failed:', error);
       toast.error(`Failed to add template: ${error.message}`);
     },
@@ -81,14 +200,22 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   // Handle template addition
   const handleAddTemplate = useCallback(async (template: TemplateDefinition) => {
     console.log('[TemplatesPanelG] Adding template:', template.name);
+    console.log('[TemplatesPanelG] Template object:', template);
+    console.log('[TemplatesPanelG] Template code preview:', template.getCode().substring(0, 200) + '...');
     
-    addTemplateMutation.mutate({
+    setLoadingTemplateId(template.id);
+    
+    const mutationParams = {
       projectId,
       templateId: template.id,
       templateName: template.name,
       templateCode: template.getCode(), // Get the code string for database storage
       templateDuration: template.duration,
-    });
+    };
+    
+    console.log('[TemplatesPanelG] Mutation parameters:', mutationParams);
+    
+    addTemplateMutation.mutate(mutationParams);
   }, [projectId, addTemplateMutation]);
 
   // Filter templates based on search (search by name but don't show name)
@@ -99,6 +226,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       template.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [searchQuery]);
+  
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Search */}
@@ -114,25 +242,22 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         </div>
       </div>
 
-      {/* Templates Grid - More Responsive */}
+      {/* Templates Grid - Dynamic responsive grid */}
       <div className="flex-1 overflow-y-auto p-2">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div 
+          className="grid gap-3"
+          style={{
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'
+          }}
+        >
           {filteredTemplates.map((template) => (
-            <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              {/* Full-Size Preview */}
-              <TemplatePreview template={template} />
-              
-              {/* Just Add Button - No Titles */}
-              <div className="px-2 py-1">
-                <Button
-                  onClick={() => handleAddTemplate(template)}
-                  disabled={addTemplateMutation.isPending}
-                  className="w-full bg-black text-white hover:bg-gray-800 text-sm py-1 font-medium"
-                  size="sm"
-                >
-                  {addTemplateMutation.isPending ? "Adding..." : "Add"}
-                </Button>
-              </div>
+            <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
+              {/* Clickable Full-Size Preview with Frame 15 Thumbnail + Hover Video */}
+              <TemplatePreview 
+                template={template} 
+                onClick={() => handleAddTemplate(template)}
+                isLoading={loadingTemplateId === template.id}
+              />
             </Card>
           ))}
         </div>

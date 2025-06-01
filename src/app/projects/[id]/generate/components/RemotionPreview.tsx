@@ -28,6 +28,14 @@ export interface RemotionPreviewProps {
   height: number;
   refreshToken?: string;
   inputProps?: Record<string, any>;
+  // Player control props
+  controls?: boolean;
+  showVolumeControls?: boolean;
+  doubleClickToFullscreen?: boolean;
+  clickToPlay?: boolean;
+  loop?: boolean;
+  autoPlay?: boolean;
+  initialFrame?: number;
 }
 
 // The main preview component that wraps Remotion Player
@@ -38,7 +46,15 @@ export default function RemotionPreview({
   width,
   height,
   refreshToken = '',
-  inputProps = {}
+  inputProps = {},
+  // Player control props with defaults
+  controls = true,
+  showVolumeControls = true,
+  doubleClickToFullscreen = true,
+  clickToPlay = true,
+  loop = true,
+  autoPlay = true,
+  initialFrame = 0
 }: RemotionPreviewProps) {
   // Log rendering for debugging
   useEffect(() => {
@@ -65,12 +81,13 @@ export default function RemotionPreview({
             height: '100%',
             backgroundColor: 'white',
           }}
-          controls
-          showVolumeControls
-          doubleClickToFullscreen
-          clickToPlay
-          loop={true}
-          autoPlay={true}
+          controls={controls}
+          showVolumeControls={showVolumeControls}
+          doubleClickToFullscreen={doubleClickToFullscreen}
+          clickToPlay={clickToPlay}
+          loop={loop}
+          autoPlay={autoPlay}
+          initialFrame={initialFrame}
           key={refreshToken} // Force remount when refreshToken changes
           acknowledgeRemotionLicense
         />

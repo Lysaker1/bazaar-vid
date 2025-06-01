@@ -17,6 +17,7 @@ import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
+import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/utils";
 
@@ -28,6 +29,7 @@ const PANEL_COMPONENTS_G = {
   code: CodePanelG,
   storyboard: StoryboardPanelG,
   templates: TemplatesPanelG,
+  myprojects: MyProjectsPanelG,
 };
 
 const PANEL_LABELS_G = {
@@ -37,6 +39,7 @@ const PANEL_LABELS_G = {
   code: 'Code',
   storyboard: 'Storyboard',
   templates: 'Templates',
+  myprojects: 'My Projects',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -672,6 +675,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           return <TemplatesPanelG 
             projectId={projectId} 
             onSceneGenerated={handleSceneGenerated} 
+          />;
+        case 'myprojects':
+          return <MyProjectsPanelG 
+            projects={projects || []} 
+            currentProjectId={projectId}
           />;
         default:
           return null;

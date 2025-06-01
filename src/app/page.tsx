@@ -12,6 +12,7 @@ import LoginPage from "./login/page";
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [showLogin, setShowLogin] = useState(false);
+  const [loginType, setLoginType] = useState<'login' | 'signup'>('login'); // Track which button was clicked
   const [email, setEmail] = useState("");
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -51,8 +52,21 @@ export default function HomePage() {
         router.push(`/projects/${project.projectId}/generate`);
       }
     } else {
+      setLoginType('signup'); // Try for Free is essentially sign up
       setShowLogin(true);
     }
+  };
+
+  // Handle Login button click
+  const handleLoginClick = () => {
+    setLoginType('login');
+    setShowLogin(true);
+  };
+
+  // Handle Sign Up button click
+  const handleSignUpClick = () => {
+    setLoginType('signup');
+    setShowLogin(true);
   };
 
   const handleEmailSubmit = (e: React.FormEvent) => {
@@ -146,8 +160,8 @@ export default function HomePage() {
             <span className="text-base">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
           ) : (
             <>
-              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
-              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
+              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={handleLoginClick}>Login</button>
+              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={handleSignUpClick}>Sign Up</button>
             </>
           )}
         </div>
@@ -421,7 +435,7 @@ export default function HomePage() {
                 <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <LoginPage />
+            <LoginPage loginType={loginType} />
           </div>
         </div>
       )}

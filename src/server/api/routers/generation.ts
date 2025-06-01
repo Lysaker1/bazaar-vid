@@ -404,6 +404,8 @@ export const generationRouter = createTRPCRouter({
       templateDuration: z.number(),
     }))
     .mutation(async ({ input, ctx }) => {
+      console.log(`[Generation] addTemplate mutation called with input:`, JSON.stringify(input, null, 2));
+      
       const { projectId, templateId, templateName, templateCode, templateDuration } = input;
       const userId = ctx.session.user.id;
 
@@ -412,7 +414,8 @@ export const generationRouter = createTRPCRouter({
         templateId,
         templateName,
         templateDuration,
-        userId
+        userId,
+        codeLength: templateCode?.length || 0
       });
 
       try {
@@ -438,6 +441,9 @@ export const generationRouter = createTRPCRouter({
         
         // Create scene name with template info
         const sceneName = `${templateName} (Template)`;
+        
+        // Process template code to prevent variable conflicts
+        const processedTemplateCode = processTemplateCode(templateCode, templateId);
 
         // Insert template scene directly into database
         const [newScene] = await db.insert(scenes)
@@ -445,7 +451,7 @@ export const generationRouter = createTRPCRouter({
             projectId,
             name: sceneName,
             order: nextOrder,
-            tsxCode: templateCode,
+            tsxCode: processedTemplateCode,
             duration: templateDuration,
             layoutJson: JSON.stringify({
               sceneType: "template",
@@ -504,4 +510,71 @@ export const generationRouter = createTRPCRouter({
         throw new Error(`Failed to add template: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
-}); 
+});
+
+// Helper function to process template code and prevent variable conflicts
+function processTemplateCode(templateCode: string, templateId: string): string {
+  // Create unique suffix from template ID
+  const uniqueSuffix = templateId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8);
+  
+  // Find module-level const declarations before the function
+  const functionMatch = templateCode.match(/export default function (\w+)/);
+  if (!functionMatch) {
+    // If no function found, return as-is
+    return templateCode;
+  }
+  
+  const functionStart = functionMatch.index!;
+  const beforeFunction = templateCode.substring(0, functionStart);
+  const fromFunction = templateCode.substring(functionStart);
+  
+  // Extract const declarations from before function
+  const constDeclarations = beforeFunction.match(/^const\s+\w+\s*=.+$/gm) || [];
+  
+  if (constDeclarations.length === 0) {
+    // No const declarations to move, return as-is
+    return templateCode;
+  }
+  
+  // Remove const declarations from before function
+  let cleanedBeforeFunction = beforeFunction;
+  constDeclarations.forEach(declaration => {
+    cleanedBeforeFunction = cleanedBeforeFunction.replace(declaration, '');
+  });
+  
+  // Clean up extra newlines
+  cleanedBeforeFunction = cleanedBeforeFunction.replace(/\n\s*\n\s*\n/g, '\n\n');
+  
+  // Make const declarations unique and move them inside function
+  const uniqueConsts = constDeclarations.map(declaration => {
+    return declaration.replace(/^const\s+(\w+)/, `const $1_${uniqueSuffix}`);
+  });
+  
+  // Update variable references in the function code
+  let updatedFunctionCode = fromFunction;
+  constDeclarations.forEach((declaration, index) => {
+    const varMatch = declaration.match(/^const\s+(\w+)/);
+    if (varMatch) {
+      const originalVar = varMatch[1];
+      const uniqueVar = `${originalVar}_${uniqueSuffix}`;
+      // Replace all references to the original variable with the unique one
+      updatedFunctionCode = updatedFunctionCode.replace(
+        new RegExp(`\\b${originalVar}\\b`, 'g'), 
+        uniqueVar
+      );
+    }
+  });
+  
+  // Insert the unique const declarations at the start of the function
+  const functionDeclaration = updatedFunctionCode.match(/export default function \w+\(\) \{/);
+  if (functionDeclaration) {
+    const insertPoint = functionDeclaration.index! + functionDeclaration[0].length;
+    const beforeInsert = updatedFunctionCode.substring(0, insertPoint);
+    const afterInsert = updatedFunctionCode.substring(insertPoint);
+    
+    const constsToInsert = uniqueConsts.map(c => `  ${c}`).join('\n');
+    updatedFunctionCode = beforeInsert + '\n' + constsToInsert + '\n' + afterInsert;
+  }
+  
+  return cleanedBeforeFunction + updatedFunctionCode;
+} 

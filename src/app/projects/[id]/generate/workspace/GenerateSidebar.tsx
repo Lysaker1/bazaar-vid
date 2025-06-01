@@ -19,8 +19,6 @@ import {
   FolderIcon,
   BrainIcon,
   LayoutTemplateIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 
@@ -54,11 +52,12 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels - storyboard is hidden but can still be added through panel options
+// Workspace panels - includes "My Projects" as a regular panel button
 const navItems: WorkspacePanelG[] = [
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
+  { type: 'myprojects', id: 'myprojects', name: "My Projects", icon: FolderIcon, href: "#myprojects" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
 ];
 
@@ -107,6 +106,13 @@ const PANEL_OPTIONS: PanelOption[] = [
     badge: 'NEW',
     color: 'from-pink-500 to-pink-600',
   },
+  {
+    type: 'myprojects',
+    label: 'My Projects',
+    description: 'Browse and open your existing projects',
+    icon: <FolderIcon className="h-5 w-5" />,
+    color: 'from-indigo-500 to-indigo-600',
+  },
 ];
 
 export function GenerateSidebar({ 
@@ -118,7 +124,6 @@ export function GenerateSidebar({
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
-  const [isProjectsExpanded, setIsProjectsExpanded] = useState(false); // Default to collapsed
   
   // Setup mutation for creating a new project (for collapsed button)
   const utils = api.useUtils();
@@ -153,7 +158,7 @@ export function GenerateSidebar({
   
   // Calculate sidebar width based on collapsed state
   const sidebarWidth = useMemo(() => {
-    return isCollapsed ? '3rem' : '10rem';
+    return isCollapsed ? '3rem' : '12rem';
   }, [isCollapsed]);
   
   // Handle dragging panel icons from sidebar
@@ -194,21 +199,14 @@ export function GenerateSidebar({
     }
   };
 
-  // Handle project navigation
-  const handleProjectClick = (projectId: string) => {
-    if (projectId !== currentProjectId) {
-      router.push(`/projects/${projectId}/generate`);
-    }
-  };
-
   return (
     <TooltipProvider>
       <aside 
         className={`flex flex-col h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm rounded-lg transition-all duration-200 ease-linear ${isCollapsed ? 'items-center' : 'items-start'}`}
         style={{ 
           width: sidebarWidth,
-          maxWidth: isCollapsed ? '3rem' : '10rem',
-          minWidth: isCollapsed ? '3rem' : '10rem',
+          maxWidth: isCollapsed ? '3rem' : '12rem',
+          minWidth: isCollapsed ? '3rem' : '12rem',
           paddingTop: '25px',
           paddingLeft: '10px',
           paddingRight: isCollapsed ? '10px' : '20px'
@@ -273,7 +271,7 @@ export function GenerateSidebar({
           )}
         </div>
 
-        {/* Panel Navigation - Chat, Preview, Storyboard, Code */}
+        {/* Panel Navigation - Chat, Preview, Templates, My Projects, Code */}
         <nav className={`flex flex-col w-full mt-3 gap-3 ${isCollapsed ? 'items-center' : ''}`}>
           {navItems.map((item) => (
             <Tooltip key={item.id}>
@@ -317,57 +315,6 @@ export function GenerateSidebar({
             </Tooltip>
           ))}
         </nav>
-
-        {/* My Projects Section - Only show when expanded */}
-        {!isCollapsed && projects.length > 0 && (
-          <div className="w-full mt-4">
-            {/* Section Header */}
-            <div className="flex items-center mb-2 px-1">
-              <FolderIcon className="h-4 w-4 text-gray-400 dark:text-gray-500 mr-2" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                My Projects
-              </span>
-              <button
-                className="ml-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-all duration-200"
-                onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
-              >
-                {isProjectsExpanded ? (
-                  <ChevronUpIcon className="h-4 w-4" />
-                ) : (
-                  <ChevronDownIcon className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            
-            {/* Projects List */}
-            {isProjectsExpanded && (
-              <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                {projects.slice(0, 8).map((project) => (
-                  <Button
-                    key={project.id}
-                    variant="ghost"
-                    className={`h-8 w-full flex items-center justify-start rounded-lg text-xs transition-all duration-200 px-2
-                      ${project.id === currentProjectId 
-                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' 
-                        : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                      }`}
-                    onClick={() => handleProjectClick(project.id)}
-                    title={project.name}
-                  >
-                    <span className="truncate text-left">
-                      {project.name.length > 12 ? `${project.name.substring(0, 12)}...` : project.name}
-                    </span>
-                  </Button>
-                ))}
-                {projects.length > 8 && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">
-                    +{projects.length - 8} more
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Separator */}
         <div className="flex-grow"></div>

@@ -121,7 +121,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div
           className="absolute inset-0 z-0 bg-white dark:bg-gray-900 rounded-lg overflow-hidden" 
           style={{
-            left: isSidebarExpanded ? 'calc(10rem + 20px)' : 'calc(3rem + 15px + 10px)', 
+            left: isSidebarExpanded ? 'calc(12rem + 20px)' : 'calc(3rem + 15px + 10px)', 
             right: '10px',
             top: '0',
             bottom: '10px',
