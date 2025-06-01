@@ -4,7 +4,25 @@
 import { signIn } from "next-auth/react";
 import { analytics } from "~/lib/analytics";
 
-export default function LoginPage() {
+interface LoginPageProps {
+  loginType?: 'login' | 'signup';
+}
+
+export default function LoginPage({ loginType = 'login' }: LoginPageProps) {
+  const getTitle = () => {
+    if (loginType === 'signup') {
+      return "Sign up for Bazaar";
+    }
+    return "Log in to Bazaar";
+  };
+
+  const getButtonText = (provider: string) => {
+    if (loginType === 'signup') {
+      return `Sign up with ${provider}`;
+    }
+    return `Sign in with ${provider}`;
+  };
+
   const handleGitHubLogin = () => {
     // Track OAuth login attempt
     analytics.userLogin('github');
@@ -32,8 +50,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
-      <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">Sign in to Bazaar</h1>
+    <div className="w-full max-w-sm rounded-2xl bg-white p-12 relative">
+      <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">{getTitle()}</h1>
 
       <div className="flex flex-col gap-4">
         <button
@@ -43,7 +61,7 @@ export default function LoginPage() {
           <span className="flex items-center justify-center w-5 h-5">
             <GitHubIcon className="w-full h-full" />
           </span>
-          Sign in with GitHub
+          {getButtonText('GitHub')}
         </button>
 
         <button
@@ -53,7 +71,7 @@ export default function LoginPage() {
           <span className="flex items-center justify-center w-5 h-5">
             <GoogleIcon className="w-full h-full" />
           </span>
-          Sign in with Google
+          {getButtonText('Google')}
         </button>
       </div>
     </div>
