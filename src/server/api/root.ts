@@ -14,6 +14,8 @@ import { usageRouter } from "~/server/api/routers/usage";
 import { paymentRouter } from "~/server/api/routers/payment";
 import { videoAnalysisRouter } from "~/server/api/routers/video-analysis";
 import { templatesRouter } from "~/server/api/routers/templates";
+import { changelogRouter } from "~/server/api/routers/changelog";
+import { githubRouter } from "~/server/api/routers/github.router";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -39,6 +41,8 @@ export const appRouter = createTRPCRouter({
   payment: paymentRouter,
   videoAnalysis: videoAnalysisRouter,
   templates: templatesRouter,
+  changelog: changelogRouter,
+  github: githubRouter,
 });
 
 // export type definition of API
