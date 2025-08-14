@@ -6,6 +6,7 @@ import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
 import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
 import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
+import { MediaValidation } from "./mediaValidation";
 
 /**
  * Unified Code Processing Service - handles all code generation tools
@@ -41,7 +42,7 @@ export class UnifiedCodeProcessor {
     
     // 🚨 FIX: Extract code from markdown code blocks if AI included extra text
     const codeBlockMatch = cleanCode.match(/```(?:javascript|tsx|ts|js)?\n([\s\S]*?)\n```/);
-    if (codeBlockMatch) {
+    if (codeBlockMatch && codeBlockMatch[1]) {
       console.warn('🚨 [UNIFIED PROCESSOR] Extracting code from markdown block, ignoring surrounding text');
       cleanCode = codeBlockMatch[1].trim();
     } else {
@@ -99,7 +100,7 @@ export class UnifiedCodeProcessor {
   }
 
   /**
-   * UNIFIED: Generate scene name based on tool type
+   * UNIFIED: Generate scene name based on tool type and content
    */
   private generateSceneName(toolName: string, userPrompt: string, code: string): string {
     switch (toolName.toLowerCase()) {
@@ -124,8 +125,79 @@ export class UnifiedCodeProcessor {
         return 'Recreated Scene';
         
       default:
-        return 'Scene'; // Simple display name for code generator
+        // For code generator, try to extract a meaningful name from the prompt
+        
+        // Common patterns for scene descriptions
+        const patterns = [
+          /(?:create|make|generate|show|display|animate)\s+(?:a\s+)?(.+?)(?:\s+with|\s+that|\s+which|\.$)/i,
+          /(?:a|an|the)\s+(.+?)\s+(?:scene|animation|component|visual|graphic)/i,
+          /^(.+?)(?:\s+scene|\s+animation)?$/i
+        ];
+        
+        for (const pattern of patterns) {
+          const match = userPrompt.match(pattern);
+          if (match?.[1]) {
+            // Clean up and capitalize the extracted name
+            const cleanName = match[1]
+              .replace(/[.,!?;:]$/, '') // Remove trailing punctuation
+              .trim()
+              .split(' ')
+              .slice(0, 4) // Limit to 4 words
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join(' ');
+            
+            if (cleanName && cleanName.length > 2) {
+              return cleanName.substring(0, 40); // Limit total length
+            }
+          }
+        }
+        
+        // Fallback: Try to extract key nouns from the prompt
+        const nouns = userPrompt.match(/\b(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|layout)\b/gi);
+        if (nouns && nouns.length > 0) {
+          return nouns[0].charAt(0).toUpperCase() + nouns[0].slice(1).toLowerCase();
+        }
+        
+        return 'Generated Scene'; // Better default than just "Scene"
     }
+  }
+
+  /**
+   * Extract a meaningful scene name from the user prompt
+   */
+  private extractSceneNameFromPrompt(userPrompt: string): string {
+    // Common patterns for scene descriptions
+    const patterns = [
+      /(?:create|make|generate|show|display|animate)\s+(?:a\s+)?(.+?)(?:\s+with|\s+that|\s+which|\.$)/i,
+      /(?:a|an|the)\s+(.+?)\s+(?:scene|animation|component|visual|graphic)/i,
+      /^(.+?)(?:\s+scene|\s+animation)?$/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = userPrompt.match(pattern);
+      if (match?.[1]) {
+        // Clean up and capitalize the extracted name
+        const cleanName = match[1]
+          .replace(/[.,!?;:]$/, '') // Remove trailing punctuation
+          .trim()
+          .split(' ')
+          .slice(0, 4) // Limit to 4 words
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        
+        if (cleanName && cleanName.length > 2) {
+          return cleanName.substring(0, 40); // Limit total length
+        }
+      }
+    }
+    
+    // Fallback: Try to extract key nouns from the prompt
+    const nouns = userPrompt.match(/\b(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|layout)\b/gi);
+    if (nouns && nouns.length > 0) {
+      return nouns[0].charAt(0).toUpperCase() + nouns[0].slice(1).toLowerCase();
+    }
+    
+    return 'Generated Scene'; // Better default than just "Scene"
   }
 
   /**
@@ -210,6 +282,7 @@ export class UnifiedCodeProcessor {
     userPrompt: string;
     functionName: string;
     imageUrls: string[];
+    projectId?: string;
     projectFormat?: {
       format: 'landscape' | 'portrait' | 'square';
       width: number;
@@ -282,7 +355,21 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         throw new Error("No response from Image Recreator LLM");
       }
       
-      const result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      let result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      
+      // Validate and fix any hallucinated URLs
+      if (input.projectId) {
+        const validation = await MediaValidation.validateAndFixCode(
+          result.code,
+          input.projectId,
+          input.imageUrls
+        );
+        
+        if (validation.wasFixed) {
+          console.log('🔧 [IMAGE RECREATOR] Fixed hallucinated URLs:', validation.fixes);
+          result.code = validation.code;
+        }
+      }
       
       return {
         ...result,
@@ -314,22 +401,60 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       height: number;
     };
     assetUrls?: string[];
+    isYouTubeAnalysis?: boolean;
   }): Promise<CodeGenerationOutput> {
-    const config = getModel('codeGenerator');
+    // Use Sonnet 4 with temperature 0 for YouTube reproduction
+    const config = input.isYouTubeAnalysis 
+      ? { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514', temperature: 0, maxTokens: 16000 }
+      : getModel('codeGenerator');
     
     console.log('⚡ [CODE GENERATOR] DIRECT PATH: Generating code from prompt only');
+    if (input.isYouTubeAnalysis) {
+      console.log('🎥 [CODE GENERATOR] YouTube Reproduction Mode: Using Sonnet 4 with temperature 0');
+    }
     
     try {
-      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName,
-        WIDTH: input.projectFormat?.width.toString() || '1920',
-        HEIGHT: input.projectFormat?.height.toString() || '1080',
-        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
-      });
-      
-      let userPrompt = `USER REQUEST: "${input.userPrompt}"
+      let systemPrompt: { role: 'system'; content: string };
+      let userPrompt: string;
+
+      // YouTube reproduction uses description-based approach
+      if (input.isYouTubeAnalysis) {
+        // Import the description-to-code prompt
+        const { DESCRIPTION_TO_CODE } = await import('~/config/prompts/active/description-to-code');
+        
+        // Use the description-to-code system prompt
+        systemPrompt = {
+          role: 'system' as const,
+          content: DESCRIPTION_TO_CODE.content
+        };
+        
+        // Pass the description as the user prompt
+        userPrompt = `Create Remotion code for this video description:
+
+${input.userPrompt}
+
+SPECIFICATIONS:
+- Total duration: ${input.requestedDurationFrames || 180} frames (${(input.requestedDurationFrames || 180) / 30} seconds)
+- Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080}
+- Function name: ${input.functionName}
+
+CRITICAL: Create all visuals with CSS and React components. NO stock photos or external URLs.
+
+Output only code.`;
+        
+      } else {
+        // Regular creative generation
+        systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+          FUNCTION_NAME: input.functionName,
+          WIDTH: input.projectFormat?.width.toString() || '1920',
+          HEIGHT: input.projectFormat?.height.toString() || '1080',
+          FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
+        });
+        
+        userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
+      }
 
       // Add persistent asset URLs if available
       if (input.assetUrls && input.assetUrls.length > 0) {
@@ -539,7 +664,7 @@ FUNCTION NAME: ${input.functionName}`;
       
       return {
         code: cleanCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: this.extractSceneNameFromPrompt(input.userPrompt), // Extract meaningful name from prompt
         duration: durationAnalysis.frames,
         reasoning: `Code generated with ${durationAnalysis.frames} frames duration (${durationAnalysis.confidence} confidence from ${durationAnalysis.source})`,
         debug: {
@@ -571,7 +696,7 @@ export default function ${input.functionName}() {
       
       return {
         code: errorCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: "Error Scene", // Error fallback name
         duration: fallbackDuration,
         reasoning: "CodeGenerator encountered an error - auto-fix can restore from layout JSON",
         debug: { 
@@ -650,12 +775,26 @@ Transform the static design into sequential storytelling.`;
       let cleanCode = response?.content?.trim() || '';
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
       
+      // Validate and fix any hallucinated URLs
+      if (input.projectId) {
+        const validation = await MediaValidation.validateAndFixCode(
+          cleanCode,
+          input.projectId,
+          input.imageUrls
+        );
+        
+        if (validation.wasFixed) {
+          console.log('🔧 [IMAGE-TO-CODE] Fixed hallucinated URLs:', validation.fixes);
+          cleanCode = validation.code;
+        }
+      }
+      
       // Extract duration from image-generated code
       const durationAnalysis = analyzeDuration(cleanCode);
       
       return {
         code: cleanCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: this.extractSceneNameFromPrompt(imageToCodeInput.userPrompt), // Extract meaningful name from prompt
         duration: durationAnalysis.frames,
         reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
         debug: {
@@ -685,7 +824,7 @@ export default function ${input.functionName}() {
       
       return {
         code: errorCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: "Image Error", // Error fallback name
         duration: fallbackDuration,
         reasoning: "Image-to-code generation failed - auto-fix available",
         debug: { 
